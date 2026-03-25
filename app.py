@@ -157,6 +157,11 @@ def scan_uploads() -> list[dict]:
                 'error': None,
             })
         else:
+            try:
+                encrypted = ArchiveExtractor.is_encrypted(fpath)
+            except Exception:
+                encrypted = False
+
             archives.append({
                 'filename': fname,
                 'size': size,
@@ -168,14 +173,14 @@ def scan_uploads() -> list[dict]:
                 'cards': 0,
                 'wallets': 0,
                 'highlights': 0,
-                'status': 'pending',
+                'status': 'locked' if encrypted else 'pending',
                 'error': None,
             })
 
     return archives
 
 
-def process_archive(filename: str) -> dict:
+def process_archive(filename: str, password: str = None) -> dict:
     fpath = os.path.join(Config.UPLOAD_FOLDER, filename)
     if not os.path.isfile(fpath):
         return {'error': 'File not found'}
@@ -187,7 +192,7 @@ def process_archive(filename: str) -> dict:
 
     extract_dir = tempfile.mkdtemp(prefix='stex_extract_')
     try:
-        ArchiveExtractor.extract(fpath, extract_dir)
+        ArchiveExtractor.extract(fpath, extract_dir, password=password)
         result = parse_logs(extract_dir, filename)
         _normalize_screenshot_paths(result, extract_dir)
         hl = extract_highlights(result, filename)
@@ -362,8 +367,11 @@ def _watcher_loop():
                     fkey = _file_key(fpath)
                     with _cache_lock:
                         already = fkey in parse_cache
-                    if not already:
-                        process_archive(fname)
+                    if already:
+                        continue
+                    if ArchiveExtractor.is_encrypted(fpath):
+                        continue
+                    process_archive(fname)
                 except Exception:
                     pass
 
@@ -393,9 +401,13 @@ def index():
     return render_template('index.html', archives=archives, format_size=_format_size)
 
 
-@app.route('/parse/<filename>')
+@app.route('/parse/<filename>', methods=['GET', 'POST'])
 def parse_single(filename):
-    data = process_archive(filename)
+    password = None
+    if request.method == 'POST':
+        password = request.form.get('password', '').strip() or None
+
+    data = process_archive(filename, password=password)
     if 'error' in data:
         flash(f'Error parsing {filename}: {data["error"]}', 'error')
         return redirect(url_for('index'))
@@ -413,6 +425,8 @@ def parse_all_route():
             with _cache_lock:
                 already = fkey in parse_cache
             if not already:
+                if ArchiveExtractor.is_encrypted(fpath):
+                    continue
                 data = process_archive(fname)
                 if 'error' not in data:
                     count += 1
