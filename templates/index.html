@@ -95,7 +95,7 @@
                     <!-- Status Icon -->
                     <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
                         {% if a.status == 'parsed' %}bg-green-500/10 border border-green-500/20
-                        {% elif a.status == 'locked' %}bg-amber-500/10 border border-amber-500/20
+                        {% elif a.status in ('locked', 'wrong_password') %}bg-amber-500/10 border border-amber-500/20
                         {% elif a.status == 'processing' %}bg-cyan-500/10 border border-cyan-500/20
                         {% elif a.status == 'error' %}bg-red-500/10 border border-red-500/20
                         {% else %}bg-surface-light border border-surface-border{% endif %}">
@@ -103,7 +103,7 @@
                             <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                             </svg>
-                        {% elif a.status == 'locked' %}
+                        {% elif a.status in ('locked', 'wrong_password') %}
                             <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
@@ -138,6 +138,13 @@
                                               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                                     </svg>
                                     Password Protected
+                                </span>
+                            {% elif a.status == 'wrong_password' %}
+                                <span class="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-medium flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                    Wrong Password
                                 </span>
                             {% elif a.status == 'processing' %}
                                 <span class="text-cyan-400 font-medium job-phase">{{ a.phase|default('Processing...') }}</span>
@@ -197,16 +204,18 @@
                               rounded-lg transition-colors text-center whitespace-nowrap">
                         View
                     </a>
-                {% elif a.status == 'locked' %}
+                {% elif a.status in ('locked', 'wrong_password') %}
                     <button onclick="openPasswordModal('{{ a.filename }}')"
-                            class="flex-1 sm:flex-initial px-5 py-2 text-xs font-medium bg-amber-500/20 border border-amber-500/30
-                                   text-amber-400 hover:bg-amber-500/30 rounded-lg transition-colors text-center whitespace-nowrap
+                            class="flex-1 sm:flex-initial px-5 py-2 text-xs font-medium
+                                   {% if a.status == 'wrong_password' %}bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30
+                                   {% else %}bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30{% endif %}
+                                   rounded-lg transition-colors text-center whitespace-nowrap
                                    flex items-center gap-1.5 justify-center">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                         </svg>
-                        Unlock
+                        {% if a.status == 'wrong_password' %}Retry{% else %}Unlock{% endif %}
                     </button>
                 {% elif a.status == 'processing' %}
                     <div class="flex-1 sm:flex-initial px-5 py-2 text-xs font-medium bg-cyan-500/15 border border-cyan-500/25
@@ -301,7 +310,7 @@
             fetch('/api/job-status/' + encodeURIComponent(filename))
                 .then(r => r.json())
                 .then(job => {
-                    if (job.status === 'done' || job.status === 'error' || job.status === 'none') {
+                    if (job.status === 'done' || job.status === 'error' || job.status === 'wrong_password' || job.status === 'none') {
                         location.reload();
                         return;
                     }

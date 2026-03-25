@@ -201,6 +201,11 @@ def process_archive_sync(filename: str, password: str = None) -> dict:
         _set_job(filename, status='done', phase='Complete')
         return entry
 
+    except PermissionError:
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        _set_job(filename, status='wrong_password', phase='Wrong password', error='Wrong password')
+        return {'error': 'Wrong password'}
+
     except Exception as e:
         shutil.rmtree(extract_dir, ignore_errors=True)
         _set_job(filename, status='error', phase='Failed', error=str(e))
@@ -286,6 +291,21 @@ def scan_uploads() -> list[dict]:
                 'phase': job.get('phase', ''),
                 'extracted': job.get('extracted', 0),
                 'total': job.get('total', 0),
+            })
+        elif job and job['status'] == 'wrong_password':
+            archives.append({
+                'filename': fname,
+                'size': size,
+                'key': fkey,
+                'stealer_type': '—',
+                'victims': 0,
+                'passwords': 0,
+                'cookies': 0,
+                'cards': 0,
+                'wallets': 0,
+                'highlights': 0,
+                'status': 'wrong_password',
+                'error': 'Wrong password',
             })
         elif job and job['status'] == 'error':
             archives.append({

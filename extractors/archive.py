@@ -215,15 +215,24 @@ class ArchiveExtractor:
         )
 
         extracted = 0
+        output_lines = []
         for line in proc.stdout:
-            line = line.strip()
-            if not line:
+            stripped = line.strip()
+            if not stripped:
                 continue
+            output_lines.append(stripped)
             extracted += 1
             if progress_cb and total > 0:
                 progress_cb(min(extracted, total), total)
 
         proc.wait()
+
+        full_output = '\n'.join(output_lines).lower()
+        if proc.returncode != 0 and password:
+            if 'wrong password' in full_output or 'corrupt' in full_output or 'crc failed' in full_output or 'password is incorrect' in full_output:
+                raise PermissionError("Wrong password")
+            if extracted == 0:
+                raise PermissionError("Wrong password")
 
         _sanitize_long_paths(dest)
 
@@ -238,6 +247,7 @@ class ArchiveExtractor:
                 rf.setpassword(password)
             members = [m for m in rf.infolist() if not m.is_dir()]
             total = len(members)
+            fail_count = 0
             for i, member in enumerate(members, 1):
                 out_path = _safe_path(dest, member.filename)
                 if not out_path:
@@ -248,7 +258,11 @@ class ArchiveExtractor:
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     with rf.open(member) as src, open(out_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
-                except (OSError, rarfile.BadRarFile, rarfile.RarCRCError):
+                except rarfile.RarCRCError:
+                    fail_count += 1
+                    if password and fail_count >= 3:
+                        raise PermissionError("Wrong password")
+                except (OSError, rarfile.BadRarFile):
                     pass
                 if progress_cb:
                     progress_cb(i, total)
@@ -261,6 +275,7 @@ class ArchiveExtractor:
         with zipfile.ZipFile(path, 'r') as zf:
             members = [m for m in zf.infolist() if not m.is_dir()]
             total = len(members)
+            fail_count = 0
             for i, member in enumerate(members, 1):
                 out_path = _safe_path(dest, member.filename)
                 if not out_path:
@@ -271,7 +286,13 @@ class ArchiveExtractor:
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     with zf.open(member, pwd=pwd) as src, open(out_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
-                except (OSError, RuntimeError, zipfile.BadZipFile):
+                except RuntimeError as e:
+                    if 'password' in str(e).lower() or 'bad password' in str(e).lower():
+                        raise PermissionError("Wrong password")
+                    fail_count += 1
+                    if password and fail_count >= 3:
+                        raise PermissionError("Wrong password")
+                except (OSError, zipfile.BadZipFile):
                     pass
                 if progress_cb:
                     progress_cb(i, total)
@@ -285,8 +306,19 @@ class ArchiveExtractor:
         kwargs = {'mode': 'r'}
         if password:
             kwargs['password'] = password
-        with py7zr.SevenZipFile(path, **kwargs) as sz:
-            entries = sz.readall()
+        try:
+            sz = py7zr.SevenZipFile(path, **kwargs)
+        except py7zr.exceptions.PasswordRequired:
+            raise PermissionError("Wrong password")
+        with sz:
+            try:
+                entries = sz.readall()
+            except py7zr.exceptions.PasswordRequired:
+                raise PermissionError("Wrong password")
+            except Exception as e:
+                if 'password' in str(e).lower():
+                    raise PermissionError("Wrong password")
+                raise
             if entries is None:
                 return
             total = len(entries)
