@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Global Search{% endblock %}
+
+{% block nav_right %}
+    <a href="{{ url_for('index') }}" class="text-gray-500 hover:text-accent transition-colors text-xs">
+        &larr; Back to List
+    </a>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-white mb-1">Global Search</h1>
+    <p class="text-sm text-gray-500">Search across <span class="text-accent font-medium">{{ parsed_count }}</span> parsed archive(s)</p>
+</div>
+
+<form action="{{ url_for('search_page') }}" method="get" class="mb-6">
+    <div class="flex gap-3">
+        <div class="relative flex-1">
+            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input name="q" type="text" value="{{ query }}" placeholder="Search URLs, usernames, passwords, cookies, IPs..."
+                   autofocus
+                   class="w-full pl-12 pr-4 py-3 bg-surface border border-surface-border rounded-xl text-sm text-gray-200
+                          placeholder-gray-600 focus:outline-none focus:border-accent/50 transition-colors">
+        </div>
+        <button type="submit"
+                class="px-6 py-3 text-sm font-medium bg-accent hover:bg-accent-dim text-white rounded-xl transition-colors shadow-lg shadow-accent/20">
+            Search
+        </button>
+    </div>
+</form>
+
+{% if query %}
+<div class="mb-4 flex items-center gap-4">
+    <span class="text-sm text-gray-400">
+        Found <span class="text-white font-semibold font-['JetBrains_Mono']">{{ total }}</span> result(s)
+        for "<span class="text-accent">{{ query }}</span>"
+    </span>
+    {% if total >= 500 %}
+        <span class="text-xs text-yellow-500/70">(results capped at 500)</span>
+    {% endif %}
+</div>
+
+{% if pw_results %}
+<div class="bg-surface rounded-xl border border-surface-border overflow-hidden mb-4">
+    <div class="px-5 py-3 border-b border-surface-border flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center opacity-80">
+            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+            </svg>
+        </div>
+        <span class="text-sm font-semibold text-white">Passwords</span>
+        <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-md bg-surface-light text-gray-400">{{ pw_results|length }}</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+            <thead class="bg-surface-light/50">
+                <tr class="text-left text-gray-500 uppercase tracking-wider">
+                    <th class="px-4 py-2.5 font-medium">Archive</th>
+                    <th class="px-4 py-2.5 font-medium">URL</th>
+                    <th class="px-4 py-2.5 font-medium">Username</th>
+                    <th class="px-4 py-2.5 font-medium">Password</th>
+                    <th class="px-4 py-2.5 font-medium">Application</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-border/50">
+                {% for r in pw_results[:200] %}
+                <tr class="hover:bg-surface-light/30 transition-colors">
+                    <td class="px-4 py-2.5 text-gray-500 font-['JetBrains_Mono'] truncate max-w-[120px]" title="{{ r.archive }}">{{ r.archive }}</td>
+                    <td class="px-4 py-2.5 text-cyan-400 truncate max-w-[200px]" title="{{ r.url }}">{{ r.url }}</td>
+                    <td class="px-4 py-2.5 text-gray-300 truncate max-w-[150px]">{{ r.username }}</td>
+                    <td class="px-4 py-2.5 text-gray-300 font-['JetBrains_Mono'] password-blur truncate max-w-[150px]">{{ r.password }}</td>
+                    <td class="px-4 py-2.5 text-gray-500">{{ r.application }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if cookie_results %}
+<div class="bg-surface rounded-xl border border-surface-border overflow-hidden mb-4">
+    <div class="px-5 py-3 border-b border-surface-border flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center opacity-80">
+            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <span class="text-sm font-semibold text-white">Cookies</span>
+        <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-md bg-surface-light text-gray-400">{{ cookie_results|length }}</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+            <thead class="bg-surface-light/50">
+                <tr class="text-left text-gray-500 uppercase tracking-wider">
+                    <th class="px-4 py-2.5 font-medium">Archive</th>
+                    <th class="px-4 py-2.5 font-medium">Host</th>
+                    <th class="px-4 py-2.5 font-medium">Cookie Name</th>
+                    <th class="px-4 py-2.5 font-medium">Value</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-border/50">
+                {% for r in cookie_results[:200] %}
+                <tr class="hover:bg-surface-light/30 transition-colors">
+                    <td class="px-4 py-2.5 text-gray-500 font-['JetBrains_Mono'] truncate max-w-[120px]" title="{{ r.archive }}">{{ r.archive }}</td>
+                    <td class="px-4 py-2.5 text-emerald-400 truncate max-w-[200px]">{{ r.host }}</td>
+                    <td class="px-4 py-2.5 text-gray-300 truncate max-w-[150px]">{{ r.name }}</td>
+                    <td class="px-4 py-2.5 text-gray-500 font-['JetBrains_Mono'] truncate max-w-[200px]">{{ r.value[:50] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if system_results %}
+<div class="bg-surface rounded-xl border border-surface-border overflow-hidden mb-4">
+    <div class="px-5 py-3 border-b border-surface-border flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-gradient-to-br from-green-500 to-cyan-500 flex items-center justify-center opacity-80">
+            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+        </div>
+        <span class="text-sm font-semibold text-white">System Info</span>
+        <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-md bg-surface-light text-gray-400">{{ system_results|length }}</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+            <thead class="bg-surface-light/50">
+                <tr class="text-left text-gray-500 uppercase tracking-wider">
+                    <th class="px-4 py-2.5 font-medium">Archive</th>
+                    <th class="px-4 py-2.5 font-medium">IP</th>
+                    <th class="px-4 py-2.5 font-medium">Country</th>
+                    <th class="px-4 py-2.5 font-medium">OS</th>
+                    <th class="px-4 py-2.5 font-medium">Machine</th>
+                    <th class="px-4 py-2.5 font-medium">Username</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-border/50">
+                {% for r in system_results[:200] %}
+                <tr class="hover:bg-surface-light/30 transition-colors">
+                    <td class="px-4 py-2.5 text-gray-500 font-['JetBrains_Mono'] truncate max-w-[120px]">{{ r.archive }}</td>
+                    <td class="px-4 py-2.5 text-amber-400 font-['JetBrains_Mono']">{{ r.ip }}</td>
+                    <td class="px-4 py-2.5 text-gray-300">{{ r.country }}</td>
+                    <td class="px-4 py-2.5 text-gray-300 truncate max-w-[150px]">{{ r.os }}</td>
+                    <td class="px-4 py-2.5 text-gray-300">{{ r.machine_name }}</td>
+                    <td class="px-4 py-2.5 text-gray-300">{{ r.username }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if total == 0 %}
+<div class="flex flex-col items-center justify-center py-16">
+    <svg class="w-12 h-12 text-gray-700 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <p class="text-gray-500 text-sm">No results found for "<span class="text-gray-400">{{ query }}</span>"</p>
+    <p class="text-gray-600 text-xs mt-1">Try searching for a URL, username, IP address, or cookie name</p>
+</div>
+{% endif %}
+
+{% else %}
+<div class="flex flex-col items-center justify-center py-20">
+    <svg class="w-16 h-16 text-gray-800 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <h2 class="text-lg font-semibold text-gray-500 mb-1">Cross-Archive Search</h2>
+    <p class="text-gray-600 text-sm max-w-md text-center">
+        Search across all parsed archives for URLs, usernames, passwords, cookies, IPs, and system information.
+    </p>
+</div>
+{% endif %}
+{% endblock %}

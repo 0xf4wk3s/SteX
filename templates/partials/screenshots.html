@@ -1,0 +1,28 @@
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {% for victim in result.victims %}
+        {% for ss in victim.screenshots %}
+            <div class="group relative bg-[#0a0a0f] rounded-xl border border-surface-border overflow-hidden hover:border-accent/30 transition-colors">
+                <div class="aspect-video bg-surface-light flex items-center justify-center overflow-hidden">
+                    <img src="{{ url_for('serve_screenshot', session_id=session_id, filepath=ss.path) }}"
+                         alt="{{ ss.filename }}"
+                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                         loading="lazy"
+                         onerror="this.parentElement.innerHTML='<div class=\'text-gray-600 text-sm\'>Preview unavailable</div>'">
+                </div>
+                <div class="p-3">
+                    <p class="text-xs text-gray-400 truncate" title="{{ ss.filename }}">{{ ss.filename }}</p>
+                    {% if result.victims|length > 1 %}
+                        <p class="text-[10px] text-gray-600 mt-1">{{ victim.folder_name }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% endfor %}
+</div>
+
+{% if result.total_screenshots == 0 %}
+    <div class="text-center py-12 text-gray-600">
+        <p class="text-lg mb-1">No screenshots found</p>
+        <p class="text-sm">No screenshot files were detected in the uploaded logs.</p>
+    </div>
+{% endif %}

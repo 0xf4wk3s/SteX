@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block nav_right %}
+    <span class="px-2.5 py-1 rounded-md text-xs font-medium
+        {% if result.stealer_type == 'Unknown' %}bg-gray-600/30 text-gray-400
+        {% else %}bg-accent/20 text-accent{% endif %}">
+        {{ result.stealer_type }}
+    </span>
+    <span class="text-gray-500">{{ result.filename }}</span>
+    <a href="{{ url_for('index') }}"
+       class="text-gray-500 hover:text-accent transition-colors text-xs">
+        &larr; Back to List
+    </a>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    {% set stats_items = [
+        ('Passwords', result.total_passwords, 'from-cyan-500 to-teal-500', 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z'),
+        ('Cookies', result.total_cookies, 'from-emerald-500 to-green-500', 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'),
+        ('Autofills', result.total_autofills, 'from-teal-500 to-emerald-600', 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'),
+        ('Cards', result.total_cards, 'from-red-500 to-rose-600', 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'),
+        ('Wallets', result.total_wallets, 'from-cyan-600 to-blue-500', 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'),
+        ('Victims', result.victims|length, 'from-green-500 to-cyan-500', 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'),
+    ] %}
+
+    {% for label, value, gradient, icon_path in stats_items %}
+        <div class="bg-surface rounded-xl border border-surface-border p-4 hover:border-surface-border/80 transition-colors">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br {{ gradient }} flex items-center justify-center flex-shrink-0 opacity-80">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon_path }}"/>
+                    </svg>
+                </div>
+                <span class="text-xs text-gray-500 uppercase tracking-wider">{{ label }}</span>
+            </div>
+            <p class="text-2xl font-bold text-white font-['JetBrains_Mono']">{{ '{:,}'.format(value) }}</p>
+        </div>
+    {% endfor %}
+</div>
+
+<!-- Tabs -->
+<div class="bg-surface rounded-xl border border-surface-border overflow-hidden">
+    <div class="border-b border-surface-border overflow-x-auto">
+        <div class="flex min-w-max">
+            {% set hl_total = highlights.total if highlights else 0 %}
+            {% set tabs = [
+                ('passwords', 'Passwords', result.total_passwords),
+                ('cookies', 'Cookies', result.total_cookies),
+                ('highlights', 'Highlights', hl_total),
+                ('autofills', 'Autofills', result.total_autofills),
+                ('cards', 'Cards', result.total_cards),
+                ('system', 'System Info', result.victims|length),
+                ('wallets', 'Wallets', result.total_wallets),
+                ('screenshots', 'Screenshots', result.total_screenshots),
+                ('files', 'Files', result.total_files),
+            ] %}
+            {% for tab_id, tab_label, tab_count in tabs %}
+                <button onclick="switchTab('{{ tab_id }}')"
+                        id="tab-{{ tab_id }}"
+                        class="tab-btn px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors
+                               border-b-2 border-transparent text-gray-500 hover:text-gray-300
+                               {% if loop.first %}border-accent text-accent{% endif %}">
+                    {{ tab_label }}
+                    <span class="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-md bg-surface-light">{{ tab_count }}</span>
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Search & Export Bar -->
+    <div class="px-5 py-3 border-b border-surface-border flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div class="relative flex-1">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="text" id="searchInput" placeholder="Search across all data..."
+                   class="w-full pl-10 pr-4 py-2 bg-[#0a0a0f] border border-surface-border rounded-lg text-sm text-gray-300
+                          placeholder-gray-600 focus:outline-none focus:border-accent/50 transition-colors">
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button onclick="exportCurrentTab('json')"
+                    class="px-3 py-2 text-xs font-medium bg-surface-light border border-surface-border rounded-lg
+                           text-gray-400 hover:text-white hover:border-accent/30 transition-colors">
+                Export JSON
+            </button>
+            <button onclick="exportCurrentTab('csv')"
+                    class="px-3 py-2 text-xs font-medium bg-surface-light border border-surface-border rounded-lg
+                           text-gray-400 hover:text-white hover:border-accent/30 transition-colors">
+                Export CSV
+            </button>
+            <div class="relative" id="combo-dropdown">
+                <button onclick="document.getElementById('combo-menu').classList.toggle('hidden')"
+                        class="px-3 py-2 text-xs font-medium bg-accent/15 border border-accent/30 rounded-lg
+                               text-accent hover:bg-accent/25 transition-colors flex items-center gap-1">
+                    Combo Export
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="combo-menu" class="hidden absolute right-0 top-full mt-1 w-52 bg-surface border border-surface-border rounded-lg shadow-2xl z-20 py-1">
+                    <a href="{{ url_for('export_combo', session_id=session_id, fmt='user_pass') }}"
+                       class="block px-4 py-2 text-xs text-gray-400 hover:text-white hover:bg-surface-light transition-colors">
+                        user:password
+                    </a>
+                    <a href="{{ url_for('export_combo', session_id=session_id, fmt='url_user_pass') }}"
+                       class="block px-4 py-2 text-xs text-gray-400 hover:text-white hover:bg-surface-light transition-colors">
+                        url|user|password
+                    </a>
+                    <a href="{{ url_for('export_combo', session_id=session_id, fmt='email_pass') }}"
+                       class="block px-4 py-2 text-xs text-gray-400 hover:text-white hover:bg-surface-light transition-colors">
+                        email:password (only @)
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Contents -->
+    <div class="p-5">
+        <div id="panel-passwords" class="tab-panel">
+            {% include "partials/passwords.html" %}
+        </div>
+        <div id="panel-cookies" class="tab-panel hidden">
+            {% include "partials/cookies.html" %}
+        </div>
+        <div id="panel-highlights" class="tab-panel hidden">
+            {% include "partials/highlights.html" %}
+        </div>
+        <div id="panel-autofills" class="tab-panel hidden">
+            {% include "partials/autofills.html" %}
+        </div>
+        <div id="panel-cards" class="tab-panel hidden">
+            {% include "partials/cards.html" %}
+        </div>
+        <div id="panel-system" class="tab-panel hidden">
+            {% include "partials/system_info.html" %}
+        </div>
+        <div id="panel-wallets" class="tab-panel hidden">
+            {% include "partials/wallets.html" %}
+        </div>
+        <div id="panel-screenshots" class="tab-panel hidden">
+            {% include "partials/screenshots.html" %}
+        </div>
+        <div id="panel-files" class="tab-panel hidden">
+            {% include "partials/files.html" %}
+        </div>
+    </div>
+</div>
+
+{% if result.errors %}
+<div class="mt-6 bg-red-500/5 border border-red-500/20 rounded-xl p-4">
+    <h3 class="text-sm font-semibold text-red-400 mb-2">Parsing Warnings</h3>
+    <ul class="text-xs text-red-300/70 space-y-1">
+        {% for err in result.errors[:20] %}
+            <li>{{ err }}</li>
+        {% endfor %}
+        {% if result.errors|length > 20 %}
+            <li class="text-gray-500">... and {{ result.errors|length - 20 }} more</li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SESSION_ID = "{{ session_id }}";
+
+function filterHighlights(category) {
+    const rows = document.querySelectorAll('.highlight-row');
+    let allVisible = true;
+    rows.forEach(row => {
+        if (row.classList.contains('hidden') && row.dataset.category !== category) {
+            allVisible = false;
+        }
+    });
+
+    if (allVisible) {
+        rows.forEach(row => {
+            row.classList.toggle('hidden', row.dataset.category !== category);
+        });
+    } else {
+        const hiddenOfCat = document.querySelectorAll(`.highlight-row[data-category="${category}"]`);
+        const anyHidden = Array.from(hiddenOfCat).some(r => r.classList.contains('hidden'));
+        if (anyHidden) {
+            rows.forEach(row => {
+                row.classList.toggle('hidden', row.dataset.category !== category);
+            });
+        } else {
+            rows.forEach(row => row.classList.remove('hidden'));
+        }
+    }
+}
+
+document.addEventListener('click', function(e) {
+    const comboMenu = document.getElementById('combo-menu');
+    const comboDropdown = document.getElementById('combo-dropdown');
+    if (comboMenu && comboDropdown && !comboDropdown.contains(e.target)) {
+        comboMenu.classList.add('hidden');
+    }
+});
+</script>
+{% endblock %}

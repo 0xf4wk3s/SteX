@@ -1,0 +1,63 @@
+{% if highlights and highlights.total > 0 %}
+{% set cats = highlights.categories %}
+{% set findings = highlights.findings %}
+
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-5">
+    {% for cat_id, cat in cats.items() %}
+    <div class="bg-surface-light/40 rounded-lg border border-surface-border p-3 cursor-pointer hover:border-{{ cat.color }}-500/30 transition-colors"
+         onclick="filterHighlights('{{ cat_id }}')">
+        <div class="flex items-center gap-2 mb-1">
+            <svg class="w-4 h-4 text-{{ cat.color }}-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ cat.icon }}"/>
+            </svg>
+            <span class="text-xs font-medium text-{{ cat.color }}-400">{{ cat.label }}</span>
+        </div>
+        <p class="text-lg font-bold text-white font-['JetBrains_Mono']">{{ findings[cat_id]|length }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="overflow-x-auto">
+    <table class="w-full text-xs" id="highlights-table">
+        <thead class="bg-surface-light/50">
+            <tr class="text-left text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-2.5 font-medium">Category</th>
+                <th class="px-4 py-2.5 font-medium">URL</th>
+                <th class="px-4 py-2.5 font-medium">Username</th>
+                <th class="px-4 py-2.5 font-medium">Password</th>
+                <th class="px-4 py-2.5 font-medium">Victim</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-border/50">
+            {% for cat_id, items in findings.items() %}
+            {% for item in items %}
+            <tr class="hover:bg-surface-light/30 transition-colors highlight-row" data-category="{{ cat_id }}">
+                <td class="px-4 py-2.5">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium
+                        bg-{{ cats[cat_id].color }}-500/15 text-{{ cats[cat_id].color }}-400">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ cats[cat_id].icon }}"/>
+                        </svg>
+                        {{ cats[cat_id].label }}
+                    </span>
+                </td>
+                <td class="px-4 py-2.5 text-cyan-400 truncate max-w-[250px]" title="{{ item.url }}">{{ item.url }}</td>
+                <td class="px-4 py-2.5 text-gray-300 truncate max-w-[150px]">{{ item.username }}</td>
+                <td class="px-4 py-2.5 text-gray-300 font-['JetBrains_Mono'] password-blur truncate max-w-[150px]">{{ item.password }}</td>
+                <td class="px-4 py-2.5 text-gray-500 font-['JetBrains_Mono'] truncate max-w-[120px]">{{ item.victim }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% else %}
+<div class="flex flex-col items-center justify-center py-12">
+    <svg class="w-12 h-12 text-gray-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+    </svg>
+    <p class="text-gray-500 text-sm">No high-value findings detected</p>
+    <p class="text-gray-600 text-xs mt-1">Banking, crypto, admin panels, and other sensitive credentials will appear here</p>
+</div>
+{% endif %}

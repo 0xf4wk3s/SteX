@@ -1,0 +1,43 @@
+<div class="overflow-x-auto">
+    <table class="w-full text-sm data-table" id="walletsTable">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-surface-border">
+                <th class="pb-3 pr-4 font-medium">#</th>
+                <th class="pb-3 pr-4 font-medium">Wallet Type</th>
+                <th class="pb-3 pr-4 font-medium">File Name</th>
+                <th class="pb-3 pr-4 font-medium">Path</th>
+                {% if result.victims|length > 1 %}
+                <th class="pb-3 font-medium">Victim</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-border/50">
+            {% set ns = namespace(counter=0) %}
+            {% for victim in result.victims %}
+                {% for w in victim.wallets %}
+                    {% set ns.counter = ns.counter + 1 %}
+                    <tr class="hover:bg-surface-light/50 transition-colors data-row">
+                        <td class="py-2.5 pr-4 text-gray-600 font-mono text-xs">{{ ns.counter }}</td>
+                        <td class="py-2.5 pr-4">
+                            <span class="px-2 py-0.5 text-xs rounded-md bg-purple-500/15 text-purple-400">
+                                {{ w.wallet_type }}
+                            </span>
+                        </td>
+                        <td class="py-2.5 pr-4 text-gray-300 font-['JetBrains_Mono'] text-xs">{{ w.wallet_name }}</td>
+                        <td class="py-2.5 pr-4 text-gray-500 text-xs max-w-[300px] truncate" title="{{ w.path }}">{{ w.path }}</td>
+                        {% if result.victims|length > 1 %}
+                        <td class="py-2.5 text-gray-600 text-xs">{{ victim.folder_name }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if result.total_wallets == 0 %}
+        <div class="text-center py-12 text-gray-600">
+            <p class="text-lg mb-1">No crypto wallets found</p>
+            <p class="text-sm">No wallet data was detected in the uploaded logs.</p>
+        </div>
+    {% endif %}
+</div>

@@ -1,0 +1,44 @@
+<div class="overflow-x-auto">
+    <table class="w-full text-sm data-table" id="filesTable">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-surface-border">
+                <th class="pb-3 pr-4 font-medium">#</th>
+                <th class="pb-3 pr-4 font-medium">Filename</th>
+                <th class="pb-3 pr-4 font-medium">Path</th>
+                <th class="pb-3 pr-4 font-medium">Size</th>
+                {% if result.victims|length > 1 %}
+                <th class="pb-3 font-medium">Victim</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-border/50">
+            {% set ns = namespace(counter=0) %}
+            {% for victim in result.victims %}
+                {% for f in victim.grabbed_files %}
+                    {% set ns.counter = ns.counter + 1 %}
+                    <tr class="hover:bg-surface-light/50 transition-colors data-row">
+                        <td class="py-2.5 pr-4 text-gray-600 font-mono text-xs">{{ ns.counter }}</td>
+                        <td class="py-2.5 pr-4 text-gray-300 font-['JetBrains_Mono'] text-xs">{{ f.filename }}</td>
+                        <td class="py-2.5 pr-4 text-gray-500 text-xs max-w-[300px] truncate" title="{{ f.path }}">{{ f.path }}</td>
+                        <td class="py-2.5 pr-4 text-gray-500 font-mono text-xs whitespace-nowrap">
+                            {% if f.size < 1024 %}{{ f.size }} B
+                            {% elif f.size < 1048576 %}{{ '%.1f'| format(f.size / 1024) }} KB
+                            {% else %}{{ '%.1f'| format(f.size / 1048576) }} MB
+                            {% endif %}
+                        </td>
+                        {% if result.victims|length > 1 %}
+                        <td class="py-2.5 text-gray-600 text-xs">{{ victim.folder_name }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if result.total_files == 0 %}
+        <div class="text-center py-12 text-gray-600">
+            <p class="text-lg mb-1">No grabbed files found</p>
+            <p class="text-sm">No file grabber data was detected in the uploaded logs.</p>
+        </div>
+    {% endif %}
+</div>

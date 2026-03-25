@@ -1,0 +1,99 @@
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0a0a0f;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #2a2a3e;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3a3a4e;
+}
+
+/* Selection */
+::selection {
+    background: rgba(6, 182, 212, 0.3);
+    color: #e2e8f0;
+}
+
+/* Tables */
+.data-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.data-table th {
+    position: sticky;
+    top: 0;
+    background: #12121a;
+    z-index: 5;
+}
+
+/* Password blur toggle */
+.password-cell {
+    transition: filter 0.2s ease;
+}
+
+/* Drop zone active */
+.drop-active {
+    border-color: #06b6d4 !important;
+    background: rgba(6, 182, 212, 0.08) !important;
+}
+
+/* Tab transitions */
+.tab-panel {
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pagination */
+.page-btn {
+    min-width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    border: 1px solid #2a2a3e;
+    background: #12121a;
+    color: #9ca3af;
+    cursor: pointer;
+}
+
+.page-btn:hover {
+    border-color: rgba(6, 182, 212, 0.3);
+    color: #e2e8f0;
+}
+
+.page-btn.active {
+    background: #06b6d4;
+    border-color: #06b6d4;
+    color: white;
+}
+
+.page-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 16px;
+    margin-top: 16px;
+    border-top: 1px solid #1e1e2e;
+}

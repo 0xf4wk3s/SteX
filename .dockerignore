@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.db
+*.db-wal
+*.db-shm
+.git
+.gitignore
+.env
+*.md
+uploads/*
+!uploads/.gitkeep
+.cursor
+.vscode

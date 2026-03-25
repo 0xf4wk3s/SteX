@@ -1,0 +1,55 @@
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    {% for victim in result.victims %}
+        {% if victim.system_info %}
+        <div class="bg-[#0a0a0f] rounded-xl border border-surface-border p-5">
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-surface-border">
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-white">{{ victim.folder_name }}</p>
+                    <p class="text-xs text-gray-500">{{ victim.stealer_type }}</p>
+                </div>
+            </div>
+
+            <div class="space-y-2.5 text-xs">
+                {% set info = victim.system_info %}
+                {% set fields = [
+                    ('IP Address', info.ip, 'text-yellow-400'),
+                    ('Country', info.country, 'text-gray-300'),
+                    ('City', info.city, 'text-gray-300'),
+                    ('HWID', info.hwid, 'text-purple-400'),
+                    ('OS', info.os, 'text-gray-300'),
+                    ('Computer', info.machine_name, 'text-gray-300'),
+                    ('Username', info.username, 'text-gray-300'),
+                    ('CPU', info.cpu, 'text-gray-300'),
+                    ('GPU', info.gpu, 'text-gray-300'),
+                    ('RAM', info.ram, 'text-gray-300'),
+                    ('Resolution', info.screen_resolution, 'text-gray-300'),
+                    ('Language', info.language, 'text-gray-300'),
+                    ('Timezone', info.timezone, 'text-gray-300'),
+                ] %}
+
+                {% for label, value, color_class in fields %}
+                    {% if value %}
+                    <div class="flex justify-between items-start gap-4">
+                        <span class="text-gray-500 flex-shrink-0">{{ label }}</span>
+                        <span class="{{ color_class }} font-['JetBrains_Mono'] text-right break-all">{{ value }}</span>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+{% if not result.victims or not result.victims|selectattr('system_info')|list %}
+    <div class="text-center py-12 text-gray-600">
+        <p class="text-lg mb-1">No system information found</p>
+        <p class="text-sm">No system info was detected in the uploaded logs.</p>
+    </div>
+{% endif %}

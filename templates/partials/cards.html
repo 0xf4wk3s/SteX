@@ -1,0 +1,50 @@
+<div class="overflow-x-auto">
+    <table class="w-full text-sm data-table" id="cardsTable">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-surface-border">
+                <th class="pb-3 pr-4 font-medium">#</th>
+                <th class="pb-3 pr-4 font-medium">Card Type</th>
+                <th class="pb-3 pr-4 font-medium">Number</th>
+                <th class="pb-3 pr-4 font-medium">Holder</th>
+                <th class="pb-3 pr-4 font-medium">Expiry</th>
+                {% if result.victims|length > 1 %}
+                <th class="pb-3 font-medium">Victim</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-border/50">
+            {% set ns = namespace(counter=0) %}
+            {% for victim in result.victims %}
+                {% for card in victim.credit_cards %}
+                    {% set ns.counter = ns.counter + 1 %}
+                    <tr class="hover:bg-surface-light/50 transition-colors data-row">
+                        <td class="py-2.5 pr-4 text-gray-600 font-mono text-xs">{{ ns.counter }}</td>
+                        <td class="py-2.5 pr-4">
+                            <span class="px-2 py-0.5 text-xs rounded-md
+                                {% if card.card_type == 'Visa' %}bg-cyan-500/15 text-cyan-400
+                                {% elif card.card_type == 'Mastercard' %}bg-orange-500/15 text-orange-400
+                                {% elif card.card_type == 'Amex' %}bg-green-500/15 text-green-400
+                                {% else %}bg-gray-500/15 text-gray-400{% endif %}">
+                                {{ card.card_type or 'Unknown' }}
+                            </span>
+                        </td>
+                        <td class="py-2.5 pr-4 text-red-400 font-['JetBrains_Mono'] text-xs cursor-pointer hover:text-red-300"
+                            onclick="this.classList.toggle('blur-sm')">{{ card.number }}</td>
+                        <td class="py-2.5 pr-4 text-gray-300 text-xs">{{ card.holder }}</td>
+                        <td class="py-2.5 pr-4 text-gray-400 font-mono text-xs">{{ card.exp_month }}/{{ card.exp_year }}</td>
+                        {% if result.victims|length > 1 %}
+                        <td class="py-2.5 text-gray-600 text-xs">{{ victim.folder_name }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if result.total_cards == 0 %}
+        <div class="text-center py-12 text-gray-600">
+            <p class="text-lg mb-1">No credit cards found</p>
+            <p class="text-sm">No credit card data was detected in the uploaded logs.</p>
+        </div>
+    {% endif %}
+</div>

@@ -1,0 +1,15 @@
+services:
+  stex:
+    build: .
+    container_name: stex
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - stex-data:/app/data
+    environment:
+      - STEX_SECRET_KEY=change-me-in-production
+    restart: unless-stopped
+
+volumes:
+  stex-data:

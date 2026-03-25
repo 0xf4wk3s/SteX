@@ -1,0 +1,45 @@
+<div class="overflow-x-auto">
+    <table class="w-full text-sm data-table" id="cookiesTable">
+        <thead>
+            <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-surface-border">
+                <th class="pb-3 pr-4 font-medium">#</th>
+                <th class="pb-3 pr-4 font-medium">Host</th>
+                <th class="pb-3 pr-4 font-medium">Name</th>
+                <th class="pb-3 pr-4 font-medium">Value</th>
+                <th class="pb-3 pr-4 font-medium">Path</th>
+                <th class="pb-3 pr-4 font-medium">Secure</th>
+                <th class="pb-3 font-medium">Expires</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-border/50">
+            {% set ns = namespace(counter=0) %}
+            {% for victim in result.victims %}
+                {% for c in victim.cookies %}
+                    {% set ns.counter = ns.counter + 1 %}
+                    <tr class="hover:bg-surface-light/50 transition-colors data-row">
+                        <td class="py-2.5 pr-4 text-gray-600 font-mono text-xs">{{ ns.counter }}</td>
+                        <td class="py-2.5 pr-4 text-emerald-400/70 text-xs max-w-[200px] truncate" title="{{ c.host }}">{{ c.host }}</td>
+                        <td class="py-2.5 pr-4 text-gray-300 font-['JetBrains_Mono'] text-xs max-w-[150px] truncate" title="{{ c.name }}">{{ c.name }}</td>
+                        <td class="py-2.5 pr-4 text-gray-400 font-['JetBrains_Mono'] text-xs max-w-[200px] truncate" title="{{ c.value }}">{{ c.value[:50] }}{% if c.value|length > 50 %}...{% endif %}</td>
+                        <td class="py-2.5 pr-4 text-gray-600 text-xs">{{ c.path }}</td>
+                        <td class="py-2.5 pr-4 text-xs">
+                            {% if c.is_secure %}
+                                <span class="text-green-400">Yes</span>
+                            {% else %}
+                                <span class="text-gray-600">No</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 text-gray-600 text-xs">{{ c.expires }}</td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if result.total_cookies == 0 %}
+        <div class="text-center py-12 text-gray-600">
+            <p class="text-lg mb-1">No cookies found</p>
+            <p class="text-sm">No cookie data was detected in the uploaded logs.</p>
+        </div>
+    {% endif %}
+</div>
