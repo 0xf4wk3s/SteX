@@ -27,14 +27,15 @@ app.config.from_object(Config)
 Config.init()
 db.init_db()
 
-# Thread-safe cache with RLock (reentrant for nested calls)
 _cache_lock = threading.RLock()
 parse_cache: dict[str, dict] = {}
 _watcher_known: set[str] = set()
 
+_jobs_lock = threading.Lock()
+_jobs: dict[str, dict] = {}
+
 
 def _load_cache_from_db():
-    """Restore parse_cache from SQLite on startup."""
     loaded = db.load_all()
     with _cache_lock:
         parse_cache.update(loaded)
@@ -117,6 +118,115 @@ def _normalize_screenshot_paths(result: ParseResult, base_dir: str):
                 ss.path = os.path.relpath(ss.path, base_dir).replace('\\', '/')
 
 
+def _format_size(size: int) -> str:
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1048576:
+        return f"{size / 1024:.1f} KB"
+    elif size < 1073741824:
+        return f"{size / 1048576:.1f} MB"
+    return f"{size / 1073741824:.1f} GB"
+
+
+# ── Job / Background Processing ──────────────────────────────────────
+
+def _get_job(filename: str) -> dict | None:
+    with _jobs_lock:
+        return _jobs.get(filename, {}).copy() if filename in _jobs else None
+
+
+def _set_job(filename: str, **kwargs):
+    with _jobs_lock:
+        if filename not in _jobs:
+            _jobs[filename] = {
+                'status': 'queued',
+                'phase': '',
+                'extracted': 0,
+                'total': 0,
+                'error': '',
+            }
+        _jobs[filename].update(kwargs)
+
+
+def _clear_job(filename: str):
+    with _jobs_lock:
+        _jobs.pop(filename, None)
+
+
+def _is_processing(filename: str) -> bool:
+    with _jobs_lock:
+        job = _jobs.get(filename)
+        return job is not None and job['status'] in ('queued', 'extracting', 'parsing')
+
+
+def process_archive_sync(filename: str, password: str = None) -> dict:
+    """Synchronous archive processing (used by background threads)."""
+    fpath = os.path.join(Config.UPLOAD_FOLDER, filename)
+    if not os.path.isfile(fpath):
+        return {'error': 'File not found'}
+
+    fkey = _file_key(fpath)
+    with _cache_lock:
+        if fkey in parse_cache:
+            return parse_cache[fkey]
+
+    extract_dir = tempfile.mkdtemp(prefix='stex_extract_')
+    try:
+        _set_job(filename, status='extracting', phase='Extracting files...')
+
+        def on_progress(extracted, total):
+            _set_job(filename, extracted=extracted, total=total)
+
+        ArchiveExtractor.extract(fpath, extract_dir, password=password,
+                                 progress_cb=on_progress)
+
+        _set_job(filename, status='parsing', phase='Parsing logs...',
+                 extracted=0, total=0)
+
+        result = parse_logs(extract_dir, filename)
+        _normalize_screenshot_paths(result, extract_dir)
+        hl = extract_highlights(result, filename)
+
+        entry = {
+            'result': result,
+            'extract_dir': extract_dir,
+            'highlights': hl,
+        }
+
+        with _cache_lock:
+            parse_cache[fkey] = entry
+
+        db.save_archive(fkey, filename, extract_dir, result, hl)
+
+        _set_job(filename, status='done', phase='Complete')
+        return entry
+
+    except Exception as e:
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        _set_job(filename, status='error', phase='Failed', error=str(e))
+        return {'error': str(e)}
+
+
+def process_archive_bg(filename: str, password: str = None):
+    """Start archive processing in a background thread."""
+    if _is_processing(filename):
+        return
+
+    _set_job(filename, status='queued', phase='Queued...',
+             extracted=0, total=0, error='')
+
+    def _worker():
+        try:
+            process_archive_sync(filename, password=password)
+        except Exception as e:
+            _set_job(filename, status='error', phase='Failed', error=str(e))
+
+    t = threading.Thread(target=_worker, daemon=True, name=f'parse-{filename}')
+    t.start()
+
+
+# ── Scan Uploads ─────────────────────────────────────────────────────
+
 def scan_uploads() -> list[dict]:
     archives = []
     upload_dir = Config.UPLOAD_FOLDER
@@ -137,8 +247,11 @@ def scan_uploads() -> list[dict]:
             size = 0
 
         fkey = _file_key(fpath)
+
         with _cache_lock:
             cached = parse_cache.get(fkey)
+
+        job = _get_job(fname)
 
         if cached:
             hl = cached.get('highlights', {})
@@ -155,6 +268,39 @@ def scan_uploads() -> list[dict]:
                 'highlights': hl.get('total', 0) if isinstance(hl, dict) else 0,
                 'status': 'parsed',
                 'error': None,
+            })
+        elif job and job['status'] in ('queued', 'extracting', 'parsing'):
+            archives.append({
+                'filename': fname,
+                'size': size,
+                'key': fkey,
+                'stealer_type': '—',
+                'victims': 0,
+                'passwords': 0,
+                'cookies': 0,
+                'cards': 0,
+                'wallets': 0,
+                'highlights': 0,
+                'status': 'processing',
+                'error': None,
+                'phase': job.get('phase', ''),
+                'extracted': job.get('extracted', 0),
+                'total': job.get('total', 0),
+            })
+        elif job and job['status'] == 'error':
+            archives.append({
+                'filename': fname,
+                'size': size,
+                'key': fkey,
+                'stealer_type': '—',
+                'victims': 0,
+                'passwords': 0,
+                'cookies': 0,
+                'cards': 0,
+                'wallets': 0,
+                'highlights': 0,
+                'status': 'error',
+                'error': job.get('error', 'Unknown error'),
             })
         else:
             try:
@@ -178,50 +324,6 @@ def scan_uploads() -> list[dict]:
             })
 
     return archives
-
-
-def process_archive(filename: str, password: str = None) -> dict:
-    fpath = os.path.join(Config.UPLOAD_FOLDER, filename)
-    if not os.path.isfile(fpath):
-        return {'error': 'File not found'}
-
-    fkey = _file_key(fpath)
-    with _cache_lock:
-        if fkey in parse_cache:
-            return parse_cache[fkey]
-
-    extract_dir = tempfile.mkdtemp(prefix='stex_extract_')
-    try:
-        ArchiveExtractor.extract(fpath, extract_dir, password=password)
-        result = parse_logs(extract_dir, filename)
-        _normalize_screenshot_paths(result, extract_dir)
-        hl = extract_highlights(result, filename)
-
-        entry = {
-            'result': result,
-            'extract_dir': extract_dir,
-            'highlights': hl,
-        }
-
-        with _cache_lock:
-            parse_cache[fkey] = entry
-
-        db.save_archive(fkey, filename, extract_dir, result, hl)
-        return entry
-
-    except Exception as e:
-        shutil.rmtree(extract_dir, ignore_errors=True)
-        return {'error': str(e)}
-
-
-def _format_size(size: int) -> str:
-    if size < 1024:
-        return f"{size} B"
-    elif size < 1048576:
-        return f"{size / 1024:.1f} KB"
-    elif size < 1073741824:
-        return f"{size / 1048576:.1f} MB"
-    return f"{size / 1073741824:.1f} GB"
 
 
 # ── Global Search ─────────────────────────────────────────────────────
@@ -288,7 +390,6 @@ def global_search(query: str, max_results: int = 500) -> list[dict]:
 # ── Duplicate Detection ───────────────────────────────────────────────
 
 def find_duplicates() -> dict:
-    """Find credentials appearing in multiple archives."""
     cred_index: dict[str, list[dict]] = defaultdict(list)
 
     with _cache_lock:
@@ -367,11 +468,11 @@ def _watcher_loop():
                     fkey = _file_key(fpath)
                     with _cache_lock:
                         already = fkey in parse_cache
-                    if already:
+                    if already or _is_processing(fname):
                         continue
                     if ArchiveExtractor.is_encrypted(fpath):
                         continue
-                    process_archive(fname)
+                    process_archive_bg(fname)
                 except Exception:
                     pass
 
@@ -407,11 +508,23 @@ def parse_single(filename):
     if request.method == 'POST':
         password = request.form.get('password', '').strip() or None
 
-    data = process_archive(filename, password=password)
-    if 'error' in data:
-        flash(f'Error parsing {filename}: {data["error"]}', 'error')
+    fpath = os.path.join(Config.UPLOAD_FOLDER, filename)
+    if not os.path.isfile(fpath):
+        flash(f'Archive not found: {filename}', 'error')
         return redirect(url_for('index'))
-    return redirect(url_for('dashboard', filename=filename))
+
+    fkey = _file_key(fpath)
+    with _cache_lock:
+        if fkey in parse_cache:
+            return redirect(url_for('dashboard', filename=filename))
+
+    if _is_processing(filename):
+        flash(f'{filename} is already being processed.', 'info')
+        return redirect(url_for('index'))
+
+    process_archive_bg(filename, password=password)
+    flash(f'Started processing {filename} in background.', 'success')
+    return redirect(url_for('index'))
 
 
 @app.route('/parse-all')
@@ -424,13 +537,12 @@ def parse_all_route():
             fkey = _file_key(fpath)
             with _cache_lock:
                 already = fkey in parse_cache
-            if not already:
+            if not already and not _is_processing(fname):
                 if ArchiveExtractor.is_encrypted(fpath):
                     continue
-                data = process_archive(fname)
-                if 'error' not in data:
-                    count += 1
-    flash(f'Parsed {count} new archive(s).', 'success')
+                process_archive_bg(fname)
+                count += 1
+    flash(f'Started processing {count} archive(s) in background.', 'success')
     return redirect(url_for('index'))
 
 
@@ -446,11 +558,12 @@ def dashboard(filename):
         cached = parse_cache.get(fkey)
 
     if not cached:
-        data = process_archive(filename)
-        if 'error' in data:
-            flash(f'Error: {data["error"]}', 'error')
+        if _is_processing(filename):
+            flash(f'{filename} is still being processed...', 'info')
             return redirect(url_for('index'))
-        cached = data
+        process_archive_bg(filename)
+        flash(f'Started processing {filename} in background.', 'success')
+        return redirect(url_for('index'))
 
     return render_template(
         'dashboard.html',
@@ -656,11 +769,38 @@ def api_watcher_status():
                 current.add(fname)
     with _cache_lock:
         pc = len(parse_cache)
+
+    with _jobs_lock:
+        processing = [f for f, j in _jobs.items()
+                      if j['status'] in ('queued', 'extracting', 'parsing')]
+
     return jsonify({
         'archive_count': len(current),
         'parsed_count': pc,
+        'processing_count': len(processing),
         'archives': sorted(current),
     })
+
+
+@app.route('/api/job-status/<filename>')
+def api_job_status(filename):
+    job = _get_job(filename)
+    if not job:
+        fpath = os.path.join(Config.UPLOAD_FOLDER, filename)
+        if os.path.isfile(fpath):
+            fkey = _file_key(fpath)
+            with _cache_lock:
+                if fkey in parse_cache:
+                    return jsonify({'status': 'done', 'phase': 'Complete'})
+        return jsonify({'status': 'none'})
+    return jsonify(job)
+
+
+@app.route('/api/jobs')
+def api_jobs():
+    with _jobs_lock:
+        snapshot = {f: j.copy() for f, j in _jobs.items()}
+    return jsonify(snapshot)
 
 
 @app.route('/delete/<filename>')
@@ -673,6 +813,7 @@ def delete_archive(filename):
         if cached and 'extract_dir' in cached:
             shutil.rmtree(cached.get('extract_dir', ''), ignore_errors=True)
         db.delete_archive(fkey)
+        _clear_job(filename)
         os.remove(fpath)
         flash(f'Deleted {filename}', 'success')
     return redirect(url_for('index'))

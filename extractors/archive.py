@@ -77,7 +77,34 @@ class ArchiveExtractor:
         return False
 
     @staticmethod
-    def extract(archive_path: str, dest_dir: str = None, password: str = None) -> str:
+    def file_count(archive_path: str) -> int:
+        """Count extractable files without extracting."""
+        lower = archive_path.lower()
+        try:
+            if lower.endswith('.zip'):
+                with zipfile.ZipFile(archive_path, 'r') as zf:
+                    return sum(1 for m in zf.infolist() if not m.is_dir())
+            elif lower.endswith('.rar'):
+                if not HAS_RARFILE:
+                    return 0
+                with rarfile.RarFile(archive_path, 'r') as rf:
+                    return sum(1 for m in rf.infolist() if not m.is_dir())
+            elif lower.endswith('.7z'):
+                if not HAS_PY7ZR:
+                    return 0
+                with py7zr.SevenZipFile(archive_path, 'r') as sz:
+                    return len(sz.getnames())
+            elif lower.endswith(('.tar', '.tar.gz', '.tgz')):
+                with tarfile.open(archive_path, 'r:*') as tf:
+                    return sum(1 for m in tf.getmembers() if m.isfile())
+        except Exception:
+            return 0
+        return 0
+
+    @staticmethod
+    def extract(archive_path: str, dest_dir: str = None, password: str = None,
+                progress_cb=None) -> str:
+        """Extract archive. progress_cb(extracted, total) called per file."""
         if dest_dir is None:
             dest_dir = tempfile.mkdtemp(prefix='stex_')
 
@@ -85,57 +112,65 @@ class ArchiveExtractor:
         lower = archive_path.lower()
 
         if lower.endswith('.zip'):
-            ArchiveExtractor._extract_zip(archive_path, dest_dir, password)
+            ArchiveExtractor._extract_zip(archive_path, dest_dir, password, progress_cb)
         elif lower.endswith('.rar'):
-            ArchiveExtractor._extract_rar(archive_path, dest_dir, password)
+            ArchiveExtractor._extract_rar(archive_path, dest_dir, password, progress_cb)
         elif lower.endswith('.7z'):
-            ArchiveExtractor._extract_7z(archive_path, dest_dir, password)
+            ArchiveExtractor._extract_7z(archive_path, dest_dir, password, progress_cb)
         elif lower.endswith(('.tar', '.tar.gz', '.tgz')):
-            ArchiveExtractor._extract_tar(archive_path, dest_dir)
+            ArchiveExtractor._extract_tar(archive_path, dest_dir, progress_cb)
         else:
             raise ValueError(f"Unsupported archive format: {archive_path}")
 
         return dest_dir
 
     @staticmethod
-    def _extract_zip(path, dest, password=None):
+    def _extract_zip(path, dest, password=None, progress_cb=None):
         pwd = password.encode('utf-8') if password else None
         with zipfile.ZipFile(path, 'r') as zf:
-            for member in zf.infolist():
-                if member.is_dir():
-                    continue
+            members = [m for m in zf.infolist() if not m.is_dir()]
+            total = len(members)
+            for i, member in enumerate(members, 1):
                 out_path = _safe_path(dest, member.filename)
                 if not out_path:
+                    if progress_cb:
+                        progress_cb(i, total)
                     continue
                 try:
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     with zf.open(member, pwd=pwd) as src, open(out_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
                 except (OSError, RuntimeError, zipfile.BadZipFile):
-                    continue
+                    pass
+                if progress_cb:
+                    progress_cb(i, total)
 
     @staticmethod
-    def _extract_rar(path, dest, password=None):
+    def _extract_rar(path, dest, password=None, progress_cb=None):
         if not HAS_RARFILE:
             raise ImportError("rarfile package required for RAR archives")
         with rarfile.RarFile(path, 'r') as rf:
             if password:
                 rf.setpassword(password)
-            for member in rf.infolist():
-                if member.is_dir():
-                    continue
+            members = [m for m in rf.infolist() if not m.is_dir()]
+            total = len(members)
+            for i, member in enumerate(members, 1):
                 out_path = _safe_path(dest, member.filename)
                 if not out_path:
+                    if progress_cb:
+                        progress_cb(i, total)
                     continue
                 try:
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     with rf.open(member) as src, open(out_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
                 except (OSError, rarfile.BadRarFile, rarfile.RarCRCError):
-                    continue
+                    pass
+                if progress_cb:
+                    progress_cb(i, total)
 
     @staticmethod
-    def _extract_7z(path, dest, password=None):
+    def _extract_7z(path, dest, password=None, progress_cb=None):
         if not HAS_PY7ZR:
             raise ImportError("py7zr package required for 7z archives")
         kwargs = {'mode': 'r'}
@@ -145,32 +180,41 @@ class ArchiveExtractor:
             entries = sz.readall()
             if entries is None:
                 return
-            for member_name, bio in entries.items():
+            total = len(entries)
+            for i, (member_name, bio) in enumerate(entries.items(), 1):
                 out_path = _safe_path(dest, member_name)
                 if not out_path:
+                    if progress_cb:
+                        progress_cb(i, total)
                     continue
                 try:
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     with open(out_path, 'wb') as dst:
                         shutil.copyfileobj(bio, dst)
                 except OSError:
-                    continue
+                    pass
+                if progress_cb:
+                    progress_cb(i, total)
 
     @staticmethod
-    def _extract_tar(path, dest):
+    def _extract_tar(path, dest, progress_cb=None):
         with tarfile.open(path, 'r:*') as tf:
-            for member in tf.getmembers():
-                if not member.isfile():
-                    continue
+            members = [m for m in tf.getmembers() if m.isfile()]
+            total = len(members)
+            for i, member in enumerate(members, 1):
                 out_path = _safe_path(dest, member.name)
                 if not out_path:
+                    if progress_cb:
+                        progress_cb(i, total)
                     continue
                 try:
                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
                     with tf.extractfile(member) as src, open(out_path, 'wb') as dst:
                         shutil.copyfileobj(src, dst)
                 except (OSError, KeyError):
-                    continue
+                    pass
+                if progress_cb:
+                    progress_cb(i, total)
 
     @staticmethod
     def cleanup(path: str):

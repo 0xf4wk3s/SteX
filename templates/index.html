@@ -85,15 +85,19 @@
 <!-- Archive List -->
 <div class="space-y-3">
     {% for a in archives %}
-    <div class="bg-surface rounded-xl border border-surface-border hover:border-surface-border/80 transition-colors overflow-hidden">
+    <div class="bg-surface rounded-xl border border-surface-border hover:border-surface-border/80 transition-colors overflow-hidden"
+         id="archive-{{ loop.index }}" data-filename="{{ a.filename }}" data-status="{{ a.status }}">
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center">
 
             <!-- Archive Info -->
             <div class="flex-1 p-4 sm:p-5">
                 <div class="flex items-center gap-3 mb-2">
+                    <!-- Status Icon -->
                     <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
                         {% if a.status == 'parsed' %}bg-green-500/10 border border-green-500/20
                         {% elif a.status == 'locked' %}bg-amber-500/10 border border-amber-500/20
+                        {% elif a.status == 'processing' %}bg-cyan-500/10 border border-cyan-500/20
+                        {% elif a.status == 'error' %}bg-red-500/10 border border-red-500/20
                         {% else %}bg-surface-light border border-surface-border{% endif %}">
                         {% if a.status == 'parsed' %}
                             <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,6 +108,15 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                             </svg>
+                        {% elif a.status == 'processing' %}
+                            <svg class="w-4 h-4 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                        {% elif a.status == 'error' %}
+                            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
                         {% else %}
                             <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -111,7 +124,7 @@
                             </svg>
                         {% endif %}
                     </div>
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold text-white truncate" title="{{ a.filename }}">{{ a.filename }}</p>
                         <div class="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                             <span class="font-['JetBrains_Mono']">{{ format_size(a.size) }}</span>
@@ -126,6 +139,10 @@
                                     </svg>
                                     Password Protected
                                 </span>
+                            {% elif a.status == 'processing' %}
+                                <span class="text-cyan-400 font-medium job-phase">{{ a.phase|default('Processing...') }}</span>
+                            {% elif a.status == 'error' %}
+                                <span class="text-red-400 font-medium truncate max-w-[300px]" title="{{ a.error }}">{{ a.error }}</span>
                             {% else %}
                                 <span class="text-yellow-500/70">Not parsed yet</span>
                             {% endif %}
@@ -153,6 +170,23 @@
                     {% endif %}
                 </div>
                 {% endif %}
+
+                {% if a.status == 'processing' %}
+                <!-- Progress Bar -->
+                <div class="mt-3">
+                    <div class="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+                        <span class="job-phase-small">{{ a.phase|default('') }}</span>
+                        <span class="job-counter font-['JetBrains_Mono']">
+                            {% if a.total > 0 %}{{ a.extracted }}/{{ a.total }} files{% endif %}
+                        </span>
+                    </div>
+                    <div class="w-full h-1.5 bg-surface-light rounded-full overflow-hidden">
+                        <div class="job-progress h-full bg-gradient-to-r from-cyan-500 to-accent rounded-full transition-all duration-500 ease-out"
+                             style="width: {% if a.total > 0 %}{{ (a.extracted / a.total * 100)|round }}{% else %}0{% endif %}%">
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Actions -->
@@ -174,6 +208,21 @@
                         </svg>
                         Unlock
                     </button>
+                {% elif a.status == 'processing' %}
+                    <div class="flex-1 sm:flex-initial px-5 py-2 text-xs font-medium bg-cyan-500/15 border border-cyan-500/25
+                                text-cyan-400 rounded-lg text-center whitespace-nowrap flex items-center gap-1.5 justify-center">
+                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        Processing
+                    </div>
+                {% elif a.status == 'error' %}
+                    <a href="{{ url_for('parse_single', filename=a.filename) }}"
+                       class="flex-1 sm:flex-initial px-5 py-2 text-xs font-medium bg-red-500/15 border border-red-500/25
+                              text-red-400 hover:bg-red-500/25 rounded-lg transition-colors text-center whitespace-nowrap">
+                        Retry
+                    </a>
                 {% else %}
                     <a href="{{ url_for('parse_single', filename=a.filename) }}"
                        class="flex-1 sm:flex-initial px-5 py-2 text-xs font-medium bg-accent hover:bg-accent-dim text-white
@@ -243,6 +292,40 @@
 (function() {
     let lastCount = {{ archives|length }};
     let lastParsed = {{ archives|selectattr('status', 'equalto', 'parsed')|list|length }};
+    const processingFiles = new Set({{ archives|selectattr('status', 'equalto', 'processing')|map(attribute='filename')|list|tojson }});
+
+    function pollJobs() {
+        if (processingFiles.size === 0) return;
+
+        processingFiles.forEach(filename => {
+            fetch('/api/job-status/' + encodeURIComponent(filename))
+                .then(r => r.json())
+                .then(job => {
+                    if (job.status === 'done' || job.status === 'error' || job.status === 'none') {
+                        location.reload();
+                        return;
+                    }
+
+                    const card = document.querySelector(`[data-filename="${CSS.escape(filename)}"]`);
+                    if (!card) return;
+
+                    const phase = card.querySelector('.job-phase');
+                    const phaseSmall = card.querySelector('.job-phase-small');
+                    const counter = card.querySelector('.job-counter');
+                    const progress = card.querySelector('.job-progress');
+
+                    if (phase) phase.textContent = job.phase || 'Processing...';
+                    if (phaseSmall) phaseSmall.textContent = job.phase || '';
+
+                    if (job.total > 0) {
+                        const pct = Math.round((job.extracted / job.total) * 100);
+                        if (counter) counter.textContent = job.extracted + '/' + job.total + ' files';
+                        if (progress) progress.style.width = pct + '%';
+                    }
+                })
+                .catch(() => {});
+        });
+    }
 
     function checkWatcher() {
         fetch('/api/watcher-status')
@@ -255,6 +338,9 @@
             .catch(() => {});
     }
 
+    if (processingFiles.size > 0) {
+        setInterval(pollJobs, 2000);
+    }
     setInterval(checkWatcher, 8000);
 
     document.addEventListener('click', function(e) {
