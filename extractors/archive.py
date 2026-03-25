@@ -1,4 +1,5 @@
 import os
+import subprocess
 import zipfile
 import tarfile
 import shutil
@@ -17,6 +18,22 @@ except ImportError:
     HAS_PY7ZR = False
 
 MAX_FILENAME_LEN = 200
+
+_UNRAR_BIN = None
+
+
+def _find_unrar() -> str | None:
+    """Locate unrar binary once and cache the result."""
+    global _UNRAR_BIN
+    if _UNRAR_BIN is not None:
+        return _UNRAR_BIN or None
+
+    for name in ('unrar', 'unrar-free'):
+        if shutil.which(name):
+            _UNRAR_BIN = name
+            return name
+    _UNRAR_BIN = ''
+    return None
 
 
 def _safe_path(dest: str, member_name: str) -> str | None:
@@ -42,6 +59,38 @@ def _safe_path(dest: str, member_name: str) -> str | None:
     if not full.startswith(os.path.normpath(dest)):
         return None
     return full
+
+
+def _sanitize_long_paths(dest: str):
+    """Post-process: rename files/dirs with path components exceeding MAX_FILENAME_LEN."""
+    for dirpath, dirnames, filenames in os.walk(dest, topdown=False):
+        for name in filenames:
+            name_bytes = name.encode('utf-8', errors='ignore')
+            if len(name_bytes) > MAX_FILENAME_LEN:
+                base, ext = os.path.splitext(name)
+                ext_bytes = ext.encode('utf-8', errors='ignore')
+                max_base = MAX_FILENAME_LEN - len(ext_bytes)
+                truncated = base.encode('utf-8', errors='ignore')[:max_base].decode('utf-8', errors='ignore')
+                new_name = truncated + ext
+                try:
+                    os.rename(
+                        os.path.join(dirpath, name),
+                        os.path.join(dirpath, new_name)
+                    )
+                except OSError:
+                    pass
+
+        for name in dirnames:
+            name_bytes = name.encode('utf-8', errors='ignore')
+            if len(name_bytes) > MAX_FILENAME_LEN:
+                truncated = name.encode('utf-8', errors='ignore')[:MAX_FILENAME_LEN].decode('utf-8', errors='ignore')
+                try:
+                    os.rename(
+                        os.path.join(dirpath, name),
+                        os.path.join(dirpath, truncated)
+                    )
+                except OSError:
+                    pass
 
 
 class ArchiveExtractor:
@@ -124,6 +173,88 @@ class ArchiveExtractor:
 
         return dest_dir
 
+    # ── RAR: fast subprocess bulk extraction ─────────────────────────
+
+    @staticmethod
+    def _extract_rar(path, dest, password=None, progress_cb=None):
+        unrar = _find_unrar()
+        if unrar:
+            ArchiveExtractor._extract_rar_subprocess(path, dest, password, progress_cb)
+        elif HAS_RARFILE:
+            ArchiveExtractor._extract_rar_python(path, dest, password, progress_cb)
+        else:
+            raise ImportError("No RAR extraction tool available (install unrar or rarfile)")
+
+    @staticmethod
+    def _extract_rar_subprocess(path, dest, password=None, progress_cb=None):
+        """Bulk extraction via unrar subprocess — 20-30x faster than file-by-file."""
+        unrar = _find_unrar()
+
+        total = 0
+        if progress_cb:
+            try:
+                if HAS_RARFILE:
+                    with rarfile.RarFile(path, 'r') as rf:
+                        total = sum(1 for m in rf.infolist() if not m.is_dir())
+            except Exception:
+                pass
+
+        cmd = [unrar, 'x', '-o+', '-y', '-idq']
+        if password:
+            cmd.append(f'-p{password}')
+        else:
+            cmd.append('-p-')
+        cmd.extend([path, dest + os.sep])
+
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors='replace',
+        )
+
+        extracted = 0
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            extracted += 1
+            if progress_cb and total > 0:
+                progress_cb(min(extracted, total), total)
+
+        proc.wait()
+
+        _sanitize_long_paths(dest)
+
+        if progress_cb and total > 0:
+            progress_cb(total, total)
+
+    @staticmethod
+    def _extract_rar_python(path, dest, password=None, progress_cb=None):
+        """Fallback: file-by-file via rarfile Python library."""
+        with rarfile.RarFile(path, 'r') as rf:
+            if password:
+                rf.setpassword(password)
+            members = [m for m in rf.infolist() if not m.is_dir()]
+            total = len(members)
+            for i, member in enumerate(members, 1):
+                out_path = _safe_path(dest, member.filename)
+                if not out_path:
+                    if progress_cb:
+                        progress_cb(i, total)
+                    continue
+                try:
+                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                    with rf.open(member) as src, open(out_path, 'wb') as dst:
+                        shutil.copyfileobj(src, dst)
+                except (OSError, rarfile.BadRarFile, rarfile.RarCRCError):
+                    pass
+                if progress_cb:
+                    progress_cb(i, total)
+
+    # ── ZIP ──────────────────────────────────────────────────────────
+
     @staticmethod
     def _extract_zip(path, dest, password=None, progress_cb=None):
         pwd = password.encode('utf-8') if password else None
@@ -145,29 +276,7 @@ class ArchiveExtractor:
                 if progress_cb:
                     progress_cb(i, total)
 
-    @staticmethod
-    def _extract_rar(path, dest, password=None, progress_cb=None):
-        if not HAS_RARFILE:
-            raise ImportError("rarfile package required for RAR archives")
-        with rarfile.RarFile(path, 'r') as rf:
-            if password:
-                rf.setpassword(password)
-            members = [m for m in rf.infolist() if not m.is_dir()]
-            total = len(members)
-            for i, member in enumerate(members, 1):
-                out_path = _safe_path(dest, member.filename)
-                if not out_path:
-                    if progress_cb:
-                        progress_cb(i, total)
-                    continue
-                try:
-                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                    with rf.open(member) as src, open(out_path, 'wb') as dst:
-                        shutil.copyfileobj(src, dst)
-                except (OSError, rarfile.BadRarFile, rarfile.RarCRCError):
-                    pass
-                if progress_cb:
-                    progress_cb(i, total)
+    # ── 7Z ───────────────────────────────────────────────────────────
 
     @staticmethod
     def _extract_7z(path, dest, password=None, progress_cb=None):
@@ -196,6 +305,8 @@ class ArchiveExtractor:
                 if progress_cb:
                     progress_cb(i, total)
 
+    # ── TAR ──────────────────────────────────────────────────────────
+
     @staticmethod
     def _extract_tar(path, dest, progress_cb=None):
         with tarfile.open(path, 'r:*') as tf:
@@ -215,6 +326,8 @@ class ArchiveExtractor:
                     pass
                 if progress_cb:
                     progress_cb(i, total)
+
+    # ── Cleanup ──────────────────────────────────────────────────────
 
     @staticmethod
     def cleanup(path: str):
